@@ -3,6 +3,8 @@
 
 #include <QWidget>
 #include <QLabel>
+#include <functional>
+#include <QTimer>
 
 class RadialMenu : public QWidget
 {
@@ -10,22 +12,49 @@ class RadialMenu : public QWidget
 public:
     explicit RadialMenu(QWidget *parent = 0);
 
-    void setLabelList(const std::vector<std::string>& string_vector);
-    void addLabel(std::string string);
+    void addMenu(const std::string& string, RadialMenu* rw);
+    void addAction(const std::string& string, std::function<void(void)>* function);
+    void activate(const QPoint& position);
 
-    // Sets the menu's center position and displays it
-    void showMenu(const QPoint& position);
-
-signals:
-
-public slots:
+    void mouseMoveEvent(QMouseEvent* qm) override;
+    void hideEvent(QHideEvent* event) override;
 
 private:
-    std::vector<QLabel*> label_vector;
-    QPoint center;
+    enum direction {
+        EAST = 0,
+        NORTH_EAST = 4,
+        NORTH = 1,
+        NORTH_WEST = 5,
+        WEST = 2,
+        SOUTH_WEST = 6,
+        SOUTH = 3,
+        SOUTH_EAST = 7,
+        ERROR
+    };
 
-    // Distance between center and a label
+    direction directionFromAngle(float angle, bool deg=true);
+
+    QLabel* createLabel(const std::string& string);
+
+    struct radial_struct {
+        QLabel* label;
+        RadialMenu* rw;
+        std::function<void(void)>* function;
+    };
+
     const int distance = 100;
+    QPoint center;
+    QPoint current_point;
+    direction my_direction;
+    QTimer timer_show;
+    QTimer timer_stop;
+    bool stopped;
+
+    std::vector<radial_struct> struct_vector;
+
+private slots:
+    void showMenu();
+    void selection();
 };
 
 #define PI 3.14159265358979323846

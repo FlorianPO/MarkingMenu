@@ -6,30 +6,31 @@ MarkingMenu::MarkingMenu(QWidget *parent) : QWidget(parent) {
     setMouseTracking(true);
 
     // Test radial_menu
-    RadialMenu* m = new RadialMenu(this);
-    m->addLabel("label 1");
-    m->addLabel("label 2");
-    m->addLabel("label 3");
+    RadialMenu* m1 = new RadialMenu(this);
+    RadialMenu* m2 = new RadialMenu(this);
+    m1->addMenu("new_menu", m2);
+    m2->addAction("new_action", new std::function<void(void)>([](){qDebug("function_lol");}));
 
-    radial_menus.push_back(m);
+    root_menu = m1;
+    active_menu = m1;
 }
 
 void MarkingMenu::mouseMoveEvent(QMouseEvent* qm) {
-   // qDebug("");
+    if (activated)
+        active_menu->mouseMoveEvent(qm);
 }
 
 void MarkingMenu::mousePressEvent(QMouseEvent* qm) {
     if (qm->button() == Qt::RightButton) {
-        if (radial_menus.size() > 0) {
-            radial_menus.front()->showMenu(qm->pos());
-        }
+        activated = true;
+        root_menu->activate(qm->pos());
     }
 }
 
 void MarkingMenu::mouseReleaseEvent(QMouseEvent* qm) {
     if (qm->button() == Qt::RightButton) {
-        for (int i=0; i < radial_menus.size(); i++) {
-            radial_menus[i]->hide();
-        }
+        active_menu = root_menu;
+        root_menu->hide();
+        activated = false;
     }
 }

@@ -15,7 +15,9 @@ private:
     void mouseReleaseEvent(QMouseEvent* qm) override;
     void mouseMoveEvent(QMouseEvent* qm) override;
 
-    std::vector<RadialMenu*> radial_menus;
+    RadialMenu* root_menu;
+    RadialMenu* active_menu;
+    bool activated = false;
 };
 
 #endif // MARKINGMENU_H
