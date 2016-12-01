@@ -4,8 +4,8 @@
 
 #include "markingmenu.h"
 
-MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-    this->resize(QSize(1000,1000));
+MainWindow::MainWindow(const QSize& size) : QMainWindow(0) {
+    this->resize(size);
 
     QVBoxLayout* layout = new QVBoxLayout();
     QWidget* central = new QWidget(this);

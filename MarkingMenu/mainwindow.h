@@ -4,12 +4,21 @@
 #include <QMainWindow>
 class MarkingMenu;
 
+/*
+ * This class represents the main window.
+ * It also contains the MarkingMenu widget
+ * which will dispatch events to RadialMenus
+ *
+ * Glitches can occur and hide the RadialMenus
+ * (especially the top left side). Layout in a
+ * mainwindow is buggy !
+ */
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget *parent = 0);
+    explicit MainWindow(const QSize& size);
     ~MainWindow();
 
 private:

@@ -2,35 +2,26 @@
 #include <QMouseEvent>
 #include "radialmenu.h"
 
-MarkingMenu::MarkingMenu(QWidget *parent) : QWidget(parent) {
-    setMouseTracking(true);
+MarkingMenu* MarkingMenu::_t;
 
-    // Test radial_menu
-    RadialMenu* m1 = new RadialMenu(this);
-    RadialMenu* m2 = new RadialMenu(this);
-    m1->addMenu("new_menu", m2);
-    m2->addAction("new_action", new std::function<void(void)>([](){qDebug("function_lol");}));
-
-    root_menu = m1;
-    active_menu = m1;
+MarkingMenu::MarkingMenu() : QWidget(0) {
+    _t = this; // Enables static access to the marking menu
 }
 
 void MarkingMenu::mouseMoveEvent(QMouseEvent* qm) {
-    if (activated)
+    if (active_menu)
         active_menu->mouseMoveEvent(qm);
 }
 
 void MarkingMenu::mousePressEvent(QMouseEvent* qm) {
-    if (qm->button() == Qt::RightButton) {
-        activated = true;
+    if (qm->button() == Qt::RightButton && root_menu)
         root_menu->activate(qm->pos());
-    }
 }
 
 void MarkingMenu::mouseReleaseEvent(QMouseEvent* qm) {
     if (qm->button() == Qt::RightButton) {
-        active_menu = root_menu;
-        root_menu->hide();
-        activated = false;
+        if (active_menu)
+           active_menu->deactivate();
+        active_menu = 0;
     }
 }

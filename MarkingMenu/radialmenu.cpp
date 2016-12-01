@@ -3,8 +3,31 @@
 #include "markingmenu.h"
 #include "QMouseEvent"
 
-RadialMenu::RadialMenu(QWidget *parent) : QWidget(parent) {
-    hide();
+#define USER_LENGTH 30 // in px
+#define USER_SHOW_LENGTH 120 // in px
+#define RADIAL_RANGE 100 // in px
+#define SHOW_TIME 500 // in ms
+#define STOP_TIME 100 // in ms
+
+RadialMenu::RadialMenu() : QWidget(MarkingMenu::_t) {
+    hide(); // The widget is initially hidden
+}
+
+RadialMenu::~RadialMenu() {
+    for (int i=0; i < struct_vector.size(); i++) {
+        delete struct_vector[i].label;
+        if (struct_vector[i].handle_delete && struct_vector[i].function)
+            delete struct_vector[i].function;
+    }
+    // Free the marking_menu if necessary
+    if (this == MarkingMenu::_t->root_menu)
+        MarkingMenu::_t->root_menu = 0;
+    if (this == MarkingMenu::_t->active_menu)
+        MarkingMenu::_t->active_menu = 0;
+}
+
+void RadialMenu::setRootMenu() {
+    MarkingMenu::_t->root_menu = this;
 }
 
 QLabel* RadialMenu::createLabel(const std::string& string) {
@@ -27,52 +50,69 @@ void RadialMenu::addMenu(const std::string& string, RadialMenu* rw) {
         throw std::string("ERREUR : maximul number of entries reached !");
 
     QLabel* label = createLabel(string);
-    radial_struct r = { label, rw, 0 };
+    radial_struct r = { label, rw, 0, false };
     struct_vector.push_back(r);
 }
 
-void RadialMenu::addAction(const std::string& string, std::function<void(void)>* function) {
+void RadialMenu::addAction(const std::string& string, std::function<void(void)>* function, bool handle_delete) {
     if (struct_vector.size() >= 8)
         throw std::string("ERREUR : maximul number of entries reached !");
 
     QLabel* label = createLabel(string);
-    radial_struct r = { label, 0, function };
+    radial_struct r = { label, 0, function, handle_delete };
     struct_vector.push_back(r);
 }
 
-void RadialMenu::hideEvent(QHideEvent* event) {
-    disconnect(&timer_show, SIGNAL(timeout()), this, SLOT(showMenu()));
-    //disconnect(&timer_stop, &QTimer::timeout, [this](){});
-    for (int i=0; i < struct_vector.size(); i++)
-        if (struct_vector[i].rw != 0)
-            struct_vector[i].rw->hide();
-    QWidget::hideEvent(event);
+void RadialMenu::activate(const QPoint& position, bool show) {
+    MarkingMenu::_t->active_menu = this;
+
+    center = position;
+    my_direction = NOT_RESOLVED;
+    current_point = center;
+    resolved = false;
+
+    // Arm timers
+    timer_show.setSingleShot(true);
+    timer_stop.setSingleShot(true);
+    // Connect timers to RadialMenu methods
+    connect(&timer_show, SIGNAL(timeout()), this, SLOT(showMenu()));
+    connect(&timer_stop, SIGNAL(timeout()), this, SLOT(selectionStop()));
+
+    if (!show)
+        timer_show.start(SHOW_TIME);
+    else
+        showMenu();
 }
 
-void RadialMenu::activate(const QPoint& position) {
-    center = position;
-    my_direction = ERROR;
-    current_point = center;
-    stopped = false;
+void RadialMenu::deactivate() {
+    if (!resolved) {
+        // Last chance for a function to be called
+        if (my_direction < struct_vector.size())
+            if (struct_vector[my_direction].function)
+                (*struct_vector[my_direction].function)();
 
-    connect(&timer_show, SIGNAL(timeout()), this, SLOT(showMenu()));
-    timer_show.start(500);
-    connect(&timer_show, SIGNAL(timeout()), this, SLOT(showMenu()));
-    timer_show.start(500);
+        hide();
+        resolved = true;
+        // Disable timers
+        disconnect(&timer_show, SIGNAL(timeout()), this, SLOT(showMenu()));
+        disconnect(&timer_stop, SIGNAL(timeout()), this, SLOT(selectionStop()));
+    }
 }
 
 void RadialMenu::showMenu() {
-    float angle = 90.f;
-    QPoint point_orig(center.x() + distance, center.y());
-    for (int i=0; i < struct_vector.size(); i++) {
-        struct_vector[i].label->move(point_orig.x() - struct_vector[i].label->size().width()/2,
-                                     point_orig.y() - struct_vector[i].label->size().height()/2);
-        if (i%4 == 3 && i > 0)
-            point_orig = rotationGlobal(point_orig, center, -45);
-        point_orig = rotationGlobal(point_orig, center, -angle);
-    }
+    if (!isVisible()) {
+        float angle = 90.f;
+        QPoint point_orig(center.x() + RADIAL_RANGE, center.y());
+        for (int i=0; i < struct_vector.size(); i++) { // Circular positionning of the labels
+            struct_vector[i].label->move(point_orig.x() - struct_vector[i].label->size().width()/2,
+                                         point_orig.y() - struct_vector[i].label->size().height()/2);
+            if (i%4 == 3 && i > 0)
+                point_orig = rotationGlobal(point_orig, center, -45);
+            point_orig = rotationGlobal(point_orig, center, -angle);
+        }
 
-    this->show();
+        this->show();
+    }
 }
 
 RadialMenu::direction RadialMenu::directionFromAngle(float angle, bool deg) {
@@ -96,40 +136,52 @@ RadialMenu::direction RadialMenu::directionFromAngle(float angle, bool deg) {
     if (angle >= 22.5 && angle < 67.5)
         return SOUTH_EAST;
 
-    return ERROR;
+    return NOT_RESOLVED;
 }
 
 void RadialMenu::selection() {
-    if (my_direction < struct_vector.size()) {
-        radial_struct& selected = struct_vector[my_direction];
-        if (selected.rw) { // MENU
-            selected.rw->activate(qm->pos());
+    if (!resolved) {
+        if (my_direction < struct_vector.size()) { // If a direction match something
+            radial_struct& selected = struct_vector[my_direction];
+            if (selected.rw)     // MENU
+                selected.rw->activate(current_point, isVisible());
+            else                 // FUNCTION
+                (*selected.function)();
+            my_direction = NOT_RESOLVED; // Avoids lambda function call in deactivate()
+            deactivate(); // Deactivate radial_menu
         }
-        else { // Function
-            (*selected.function)();
-        }
+        else
+            my_direction = NOT_RESOLVED; // This direction is wrong
     }
-    else
-        my_direction = ERROR;
+}
+
+void RadialMenu::selectionStop() {
+    current_point = current_mouse; // Get real mouse position (not the one stored before)
+    selection();
 }
 
 void RadialMenu::mouseMoveEvent(QMouseEvent* qm) {
-    QPoint delta = qm->pos() - current_point;
-    if (delta.manhattanLength() > 30) {
-        timer_show.start(500);
+    if (!resolved) {
+        current_mouse = qm->pos();
+        QPoint delta = current_mouse - current_point;
+        float norme = std::sqrt(std::pow(delta.x(), 2) + std::pow(delta.y(), 2)); // Length dragged
+        if ((!isVisible() && norme > USER_LENGTH) ||
+             (isVisible() && norme > USER_SHOW_LENGTH) ||
+                (my_direction != NOT_RESOLVED && norme > 5)) { // If the drag is enough
+            current_point = current_mouse;
+            if (!isVisible())
+                timer_show.start(SHOW_TIME);
+            if (!resolved)
+                timer_stop.start(STOP_TIME);
 
-        float angle = atan2(delta.y(), delta.x());
-        direction dir = directionFromAngle(angle, false);
+            float angle = atan2(delta.y(), delta.x());
+            direction dir = directionFromAngle(angle, false); // Calculate direction
 
-        if (my_direction == ERROR) {
-            my_direction = dir;
+            if (my_direction == NOT_RESOLVED)
+                my_direction = dir;
+            else if (dir != my_direction)
+                selection(); // Check for a sub_menu or a function to call
         }
-        else if (dir != my_direction || stopped){
-           selection();
-        }
-
-        current_point = qm->pos();
-        timer_stop.start(250);
     }
 }
 
