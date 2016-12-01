@@ -39,7 +39,13 @@ int main(int argc, char *argv[])
     m2_21->addMenu("?", m1);
     m2_21->addMenu("?", m2_22);
 
-    m2_22->addAction("?", new std::function<void(void)>([](){qDebug("You just wasted 1 min of your life");}));
+    m2_22->addAction("?", new std::function<void(void)>([](){
+        static unsigned int cpt = 0;
+        cpt++;
+        qDebug("You just wasted %d min of your life.\nTry me hidden : UP-LEFT-DOWN-RIGHT", cpt);
+        if (cpt >= 10)
+            qDebug("STAHP! :'(");
+    }));
     m2_22->addMenu("?", m1);
     m2_22->addMenu("?", m1);
     m2_22->addMenu("?", m1);
